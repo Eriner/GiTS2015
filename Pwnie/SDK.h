@@ -15,6 +15,7 @@ struct IInventory;
 struct IQuestState;
 struct IQuest;
 struct WriteStream;
+struct GameAPI;
 
 enum DamageType
 {
@@ -36,6 +37,12 @@ struct Rotation
 	float pitch;
 	float yaw;
 	float roll;
+};
+
+struct LocationAndRotation
+{
+	Vector3 location;
+	Rotation rotation;
 };
 
 struct TimerSet
@@ -70,11 +77,6 @@ struct GhettoObject
 template<typename T> struct ActorRef
 {
 	T* m_object;
-};
-
-struct GameAPI
-{
-	//
 };
 
 struct MasterServerConnection

@@ -21,9 +21,15 @@ GameWorldRef* gwr = NULL;
 
 // Hooks go here
 
+//void __thiscall GameAPI::JoinGameServer(GameAPI *this, int id, bool transition)
+//
+
 WorldVtbl WorldBackup;
 
 typedef void(__thiscall* WorldChat_t)(World* pthis, Player*, std::string &);
+typedef bool(__thiscall* WorldIsAuthority_t)(World* pthis);
+
+bool g_admin = false;
 
 void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::string &text) {
 	if (!text.length())
@@ -50,8 +56,20 @@ void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::str
 	else if (tokens[0].compare("/sjs") == 0 && tokens.size() > 1) {
 		player->m_jumpSpeed = atoi(tokens[1].c_str());
 	}
-	else if (tokens[0].compare("admin") == 0) {
-		player->m_admin = !player->m_admin;
+	else if (tokens[0].compare("/admin") == 0) {
+		g_admin = !g_admin;
+		player->m_admin = g_admin;
+	}
+	else if (tokens[0].compare("/test") == 0) {
+		for (auto i = gwr->GameWorld->m_actors.begin(); i != gwr->GameWorld->m_actors.end(); i++) {
+			if (!(*i).m_object)
+				continue;
+
+			if ((IActor*)player == (*i).m_object)
+				continue;
+
+			(*i).m_object->vfptr->Damage((*i).m_object, (IActor*) player, player->m_equipped[0], INT_MAX, DamageType::PhysicalDamage);
+		}
 	}
 	else {
 		command = false;
@@ -62,6 +80,11 @@ void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::str
 		return;
 
 	WorldBackup.Chat(pthis, player, text);
+}
+
+bool __fastcall new_WorldIsAuthority(World* pthis, void* _EDX)
+{
+	return g_admin;
 }
 
 //
@@ -108,6 +131,7 @@ DWORD WINAPI lpHackThread(LPVOID lpParam)
 	VirtualProtect(mbi.BaseAddress, mbi.RegionSize, PAGE_EXECUTE_READWRITE, &mbi.Protect);
 	
 	gwr->GameWorld->vfptr->Chat = (WorldChat_t) new_WorldChat;
+	gwr->GameWorld->vfptr->IsAuthority = (WorldIsAuthority_t) new_WorldIsAuthority;
 
 	VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &mbi.Protect);
 

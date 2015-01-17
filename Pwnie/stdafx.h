@@ -25,8 +25,9 @@
 #include "Find.h"
 
 #include "SDK.h"
-#include "Item.h"
 #include "Actor.h"
+#include "Item.h"
 #include "NPC.h"
 #include "Player.h"
+#include "GameAPI.h"
 #include "World.h"
