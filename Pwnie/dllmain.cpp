@@ -24,12 +24,25 @@ GameWorldRef* gwr = NULL;
 //void __thiscall GameAPI::JoinGameServer(GameAPI *this, int id, bool transition)
 //
 
+Vector3* zeroVelocity = nullptr;
+Vector3* aboveBearChest = nullptr;
+Vector3* belowBearChest = nullptr;
+Vector3* lockedPosition = nullptr;
+bool lockPosition = false;
 WorldVtbl WorldBackup;
 
 typedef void(__thiscall* WorldChat_t)(World* pthis, Player*, std::string &);
 typedef bool(__thiscall* WorldIsAuthority_t)(World* pthis);
+typedef void(__thiscall *Tick_t)(World *pthis, float);
 
 bool g_admin = false;
+
+void updateLockedPosition(Vector3* src) {
+	app.log("Changing locked position to = %f, %f, %f", src->x, src->y, src->z);
+	lockedPosition->x = src->x;
+	lockedPosition->y = src->y;
+	lockedPosition->z = src->z;
+}
 
 void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::string &text) {
 	if (!text.length())
@@ -71,6 +84,37 @@ void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::str
 			(*i).m_object->vfptr->Damage((*i).m_object, (IActor*) player, player->m_equipped[0], INT_MAX, DamageType::PhysicalDamage);
 		}
 	}
+	else if (tokens[0].compare("/down") == 0) {
+		Vector3* playerPosition = new Vector3;
+		IUE4Actor* localPlayer = (IUE4Actor*)(player->m_localPlayer);
+		localPlayer->vfptr->GetPosition(localPlayer, playerPosition);
+		playerPosition->z -= 200;	// move down 200 units
+		updateLockedPosition(playerPosition);
+		localPlayer->vfptr->SetPosition(localPlayer, playerPosition);
+	}
+	else if (tokens[0].compare("/up") == 0) {
+		Vector3* playerPosition = new Vector3;
+		IUE4Actor* localPlayer = (IUE4Actor*)(player->m_localPlayer);
+		localPlayer->vfptr->GetPosition(localPlayer, playerPosition);
+		playerPosition->z += 200;	// move up 200 units
+		updateLockedPosition(playerPosition);
+		localPlayer->vfptr->SetPosition(localPlayer, playerPosition);
+	}
+	else if (tokens[0].compare("/bears") == 0) {
+		IUE4Actor* localPlayer = (IUE4Actor*)(player->m_localPlayer);
+		// go above ground
+		localPlayer->vfptr->SetPosition(localPlayer, aboveBearChest);
+		updateLockedPosition(aboveBearChest);
+		// lock position so that when we go underground in a moment, we don't fall all the way through the map
+		lockPosition = true;
+		localPlayer->vfptr->SetCharacterVelocity(localPlayer, zeroVelocity);
+		// go below ground
+		localPlayer->vfptr->SetPosition(localPlayer, belowBearChest);
+		updateLockedPosition(belowBearChest);
+	}
+	else if (tokens[0].compare("/lock") == 0) {
+		lockPosition = !lockPosition;
+	}
 	else {
 		command = false;
 	}
@@ -82,15 +126,48 @@ void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::str
 	WorldBackup.Chat(pthis, player, text);
 }
 
+void __fastcall new_Tick(World* pthis, float tickvalue)
+{
+	if (lockPosition) {
+		ILocalPlayer* localPlayer = pthis->m_localPlayer;
+		localPlayer->vfptr->SetCharacterVelocity(localPlayer, zeroVelocity);
+		localPlayer->vfptr->SetPosition(localPlayer, lockedPosition);
+	}
+
+	WorldBackup.Tick(pthis, tickvalue);
+}
+
 bool __fastcall new_WorldIsAuthority(World* pthis, void* _EDX)
 {
 	return g_admin;
 }
 
+
 //
 
 DWORD WINAPI lpHackThread(LPVOID lpParam)
 {
+	// just above ground, near the bear chest
+	aboveBearChest = new Vector3;
+	aboveBearChest->x = -7893.926758;
+	aboveBearChest->y = 64349.375000;
+	aboveBearChest->z = 2655.879395;
+
+	// just below ground, near the bear chest (basically just 200 units below aboveBearChest)
+	belowBearChest = new Vector3;
+	belowBearChest->x = -7893.926758;
+	belowBearChest->y = 64349.375000;
+	belowBearChest->z = 2455.911865;
+
+	// if you just set your velocity to 0, you still move downward, probably because of gravity.
+	// this still doesn't fix that completely. you actually move up slightly with this setting, but it's really slow.
+	zeroVelocity = new Vector3;
+	zeroVelocity->x = 0;
+	zeroVelocity->y = 0;
+	zeroVelocity->z = 9;
+
+	lockedPosition = new Vector3;
+
 	HMODULE hGameLogic = NULL;
 
 	while (hGameLogic == NULL) {
@@ -132,6 +209,7 @@ DWORD WINAPI lpHackThread(LPVOID lpParam)
 	
 	gwr->GameWorld->vfptr->Chat = (WorldChat_t) new_WorldChat;
 	gwr->GameWorld->vfptr->IsAuthority = (WorldIsAuthority_t) new_WorldIsAuthority;
+	gwr->GameWorld->vfptr->Tick = (Tick_t)new_Tick;
 
 	VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &mbi.Protect);
 
