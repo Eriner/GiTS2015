@@ -38,7 +38,7 @@ typedef void(__thiscall *Tick_t)(World *pthis, float);
 bool g_admin = false;
 
 void updateLockedPosition(Vector3* src) {
-	app.log("Changing locked position to = %f, %f, %f", src->x, src->y, src->z);
+	app.log("Changing locked position to %f, %f, %f", src->x, src->y, src->z);
 	lockedPosition->x = src->x;
 	lockedPosition->y = src->y;
 	lockedPosition->z = src->z;
@@ -114,6 +114,29 @@ void __fastcall new_WorldChat(World* pthis, void* _EDX, Player* player, std::str
 	}
 	else if (tokens[0].compare("/lock") == 0) {
 		lockPosition = !lockPosition;
+	}
+	else if (tokens[0].compare("/actorlist") == 0) {
+		for (auto i = gwr->GameWorld->m_actors.begin(); i != gwr->GameWorld->m_actors.end(); i++) {
+			if (!(*i).m_object)
+				continue;
+
+			const char* currentActorName = (*i).m_object->vfptr->GetBlueprintName((*i).m_object);
+			app.log("actor blueprint name: %s", currentActorName);
+
+			Vector3* currentActorPosition = new Vector3;
+			(*i).m_object->vfptr->GetLookPosition((*i).m_object, currentActorPosition);
+			app.log("actor look position: %f, %f, %f", currentActorPosition->x, currentActorPosition->y, currentActorPosition->z);
+		}
+	}
+	if (tokens[0].compare("/pos") == 0 && tokens.size() > 1) {
+		IUE4Actor* localPlayer = (IUE4Actor*)(player->m_localPlayer);
+
+		Vector3* newpos = new Vector3;
+		newpos->x = atof(tokens[1].c_str());
+		newpos->y = atof(tokens[2].c_str());
+		newpos->z = atof(tokens[3].c_str());
+
+		localPlayer->vfptr->SetPosition(localPlayer, newpos);
 	}
 	else {
 		command = false;
